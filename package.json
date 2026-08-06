@@ -17,10 +17,10 @@
     "long-running-commands"
   ],
   "license": "MIT",
-  "author": "Stephen Shkeda",
+  "author": "mowenroot (fork of sshkeda/pi-background-bash)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sshkeda/pi-background-bash.git"
+    "url": "git+https://github.com/mowenroot/pi-background-bash.git"
   },
   "exports": {
     ".": "./extensions/background-bash.ts"
@@ -67,7 +67,6 @@
     "LICENSE"
   ],
   "dependencies": {
-    "pi-context": "github:sshkeda/pi-context#v0.1.6",
     "pi-lane": "github:sshkeda/pi-lane#929a74b",
     "pi-pending": "github:sshkeda/pi-pending#v0.1.5"
   }

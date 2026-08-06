@@ -8,7 +8,7 @@ import type { AgentToolUpdateCallback, BashToolDetails, ExtensionAPI, Theme } fr
 import { createBashToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Box, Container, Text } from "@earendil-works/pi-tui";
 import { createPiPending } from "pi-pending";
-import { formatTruncationNotice, piContext, truncateContextText } from "pi-context";
+import { formatTruncationNotice, piContext, truncateContextText } from "./pi-context-utils.ts";
 import { Type } from "typebox";
 
 const MAX_ACTIVE_JOBS = 10;
@@ -1013,8 +1013,11 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				});
 
 				const completedPromise = runPbbBash(job, ctx.cwd, params);
+				// Capture cwd eagerly: the completion callback may fire after session
+				// teardown (headless one-shot exit), when ctx.cwd access throws.
+				const jobCwd = ctx.cwd;
 				void completedPromise.then((completed) => {
-					deliverBackgroundResult(pi, job, completed, ctx.cwd);
+					deliverBackgroundResult(pi, job, completed, jobCwd);
 				});
 				scheduleDetachedBackgroundToolResultRepair(ctx, toolCallId);
 
@@ -1100,8 +1103,11 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				details: { toolCallId: job.toolCallId },
 			});
 
+			// Capture cwd eagerly: the completion callback may fire after session
+			// teardown (headless one-shot exit), when ctx.cwd access throws.
+			const jobCwd = ctx.cwd;
 			void completedPromise.then((completed) => {
-				deliverBackgroundResult(pi, job, completed, ctx.cwd);
+				deliverBackgroundResult(pi, job, completed, jobCwd);
 			});
 			scheduleDetachedBackgroundToolResultRepair(ctx, toolCallId);
 
