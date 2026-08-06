@@ -11,28 +11,38 @@ As of v1, PBB-owned execution is the baseline: jobs are recorded with logs plus 
 
 When a background command finishes, the extension injects a follow-up result into the session and wakes the agent.
 
+## Fork notice
+
+This is a **maintained fork** of [`sshkeda/pi-background-bash`](https://github.com/sshkeda/pi-background-bash) with two fixes:
+
+1. **Installable out of the box.** The upstream package depends on the private repository `github:sshkeda/pi-context` (returns 404), so `pi install` fails for everyone. The three functions it uses (`piContext`, `truncateContextText`, `formatTruncationNotice`) are now inlined in [`extensions/pi-context-utils.ts`](extensions/pi-context-utils.ts) and the dependency is removed.
+2. **No stale-ctx crashes.** The background-completion callbacks evaluated `ctx.cwd` lazily, after session teardown in headless one-shot mode, throwing `This extension ctx is stale after session replacement or reload`. `cwd` is now captured eagerly at job start.
+
+Verified end-to-end (interactive + headless): `background: true`, automatic backgrounding after the configured threshold, detached pbb runner with full logs, follow-up injection into the session (`custom_message` entry with `kind="background_bash_result"`), and agent wake-up via `triggerTurn`.
+
 ## Why
 
 AI coding agents often need to run slow commands: test suites, builds, dev servers, downloads, deploys, benchmark loops, and watchers. Without background execution, the agent gets stuck waiting. With this extension, the agent can continue useful work and handle the command output when it arrives.
 
-## Install
-
-Install from GitHub:
+Install from this fork:
 
 ```bash
-pi install git:github.com/sshkeda/pi-background-bash
+pi install git:github.com/mowenroot/pi-background-bash
 ```
 
 Try without installing:
 
 ```bash
-pi -e git:github.com/sshkeda/pi-background-bash
+pi -e git:github.com/mowenroot/pi-background-bash
 ```
+
+> Upstream install (may fail due to the private `pi-context` dependency):
+> `pi install git:github.com/sshkeda/pi-background-bash`
 
 Local development:
 
 ```bash
-git clone https://github.com/sshkeda/pi-background-bash.git
+git clone https://github.com/mowenroot/pi-background-bash.git
 cd pi-background-bash
 npm install
 npm test
