@@ -1,6 +1,6 @@
 {
   "name": "pi-background-bash",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Pi extension that makes long-running bash commands async with background:true and automatic 30s backgrounding.",
   "type": "module",
   "keywords": [
@@ -67,7 +67,7 @@
     "LICENSE"
   ],
   "dependencies": {
-    "pi-lane": "github:sshkeda/pi-lane#929a74b",
-    "pi-pending": "github:sshkeda/pi-pending#v0.1.5"
+    "pi-lane": "git+https://github.com/sshkeda/pi-lane.git#929a74b",
+    "pi-pending": "git+https://github.com/sshkeda/pi-pending.git#v0.1.5"
   }
 }
