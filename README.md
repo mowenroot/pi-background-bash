@@ -24,7 +24,15 @@ Verified end-to-end (interactive + headless): `background: true`, automatic back
 
 AI coding agents often need to run slow commands: test suites, builds, dev servers, downloads, deploys, benchmark loops, and watchers. Without background execution, the agent gets stuck waiting. With this extension, the agent can continue useful work and handle the command output when it arrives.
 
-Install from this fork:
+## Install
+
+Install from npm (recommended):
+
+```bash
+pi install npm:pi-background-bash
+```
+
+Or from this GitHub fork:
 
 ```bash
 pi install git:github.com/mowenroot/pi-background-bash
@@ -33,7 +41,7 @@ pi install git:github.com/mowenroot/pi-background-bash
 Try without installing:
 
 ```bash
-pi -e git:github.com/mowenroot/pi-background-bash
+pi -e npm:pi-background-bash
 ```
 
 > Upstream install (may fail due to the private `pi-context` dependency):
