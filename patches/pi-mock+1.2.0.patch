@@ -1,0 +1,26 @@
+diff --git a/node_modules/pi-mock/dist/gateway.js b/node_modules/pi-mock/dist/gateway.js
+index 4a637df..95f0fa8 100644
+--- a/node_modules/pi-mock/dist/gateway.js
++++ b/node_modules/pi-mock/dist/gateway.js
+@@ -214,7 +214,7 @@ export async function createGateway(config) {
+         }
+         // LLM API — detect provider from URL path
+         if (req.method === "POST") {
+-            const provider = detectProvider(req.method, req.url ?? "");
++            const provider = detectProvider(req.method, (req.url ?? "").split("?")[0]);
+             if (provider !== "unknown") {
+                 return handleLlmApi(req, res, provider);
+             }
+diff --git a/node_modules/pi-mock/dist/providers.js b/node_modules/pi-mock/dist/providers.js
+index 08131b8..5ddec29 100644
+--- a/node_modules/pi-mock/dist/providers.js
++++ b/node_modules/pi-mock/dist/providers.js
+@@ -14,6 +14,8 @@ import { toSSE as anthropicToSSE } from "./anthropic.js";
+  * Detect which provider format a request is using, based on URL path.
+  */
+ export function detectProvider(method, path) {
++    // pi >= 1.4 anthropic SDK appends ?beta=true; strip the query before matching.
++    path = String(path).split("?")[0];
+     // Anthropic: POST /v1/messages
+     if (path.endsWith("/messages"))
+         return "anthropic";

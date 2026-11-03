@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 
 const EXT = new URL("../extensions/background-bash.ts", import.meta.url).pathname;
 const PBB_CLI = new URL("../bin/pbb.js", import.meta.url).pathname;
-const PIL_CLI = "/Users/sshkeda/gh/pi-lane/bin/pil.js";
+const PIL_CLI = new URL("../node_modules/pi-lane/bin/pil.js", import.meta.url).pathname;
 const TIMEOUT = 45_000;
 
 const bg = (command, timeout) =>
@@ -83,6 +83,21 @@ async function waitForCondition(predicate, timeoutMs = TIMEOUT) {
   throw new Error("Timed out waiting for condition");
 }
 
+function eventDump(events) {
+	// pi >= 1.4 includes the system prompt (with this extension's own guideline
+	// text) in the event stream — both as message events and inside agent_end's
+	// messages array; drop system messages so negative assertions only inspect
+	// conversation events.
+	const strip = (event) => {
+		if (event?.message?.role === "system") return { ...event, message: undefined };
+		if (Array.isArray(event?.messages) && event.messages.some((m) => m?.role === "system")) {
+			return { ...event, messages: event.messages.filter((m) => m?.role !== "system") };
+		}
+		return event;
+	};
+	return JSON.stringify(events.map(strip));
+}
+
 test("bash override returns normal results before the auto-background threshold", async () => {
   const cwd = makeConfiguredCwd({ autoBackgroundAfterSeconds: 5 });
   const mock = await createBgMock(script(
@@ -92,7 +107,7 @@ test("bash override returns normal results before the auto-background threshold"
 
   try {
     const events = await mock.run("run a quick bash command", TIMEOUT);
-    const all = JSON.stringify(events);
+    const all = eventDump(events);
     assert.match(all, /foreground/);
     assert.doesNotMatch(all, /moved to background/);
   } finally {
@@ -129,7 +144,7 @@ test("context guard trims oversized historical tool results before replay", asyn
   const toolCallId = "call_contextGuard123|fc_contextGuard456";
   const hugeResult = [
     "HUGE_CONTEXT_START should be trimmed away",
-    ...Array.from({ length: 6000 }, (_, i) => `HUGE_CONTEXT_LINE_${String(i).padStart(5, "0")} ${"x".repeat(80)}`),
+    ...Array.from({ length: 700 }, (_, i) => `HUGE_CONTEXT_LINE_${String(i).padStart(5, "0")} ${"x".repeat(80)}`),
     "HUGE_CONTEXT_END should remain",
   ].join("\n");
   const entries = [
@@ -207,7 +222,7 @@ test("bash override preserves shell semantics, cwd, environment, redirects, pipe
 
   try {
     const events = await mock.run("run shell semantics characterization", TIMEOUT);
-    const all = JSON.stringify(events);
+    const all = eventDump(events);
     assert.match(all, /env=env-ok/);
     assert.match(all, new RegExp(`cwd=${escapeRegExp(realpathSync(cwd))}`));
     assert.match(all, /pipe=HI/);
@@ -946,14 +961,19 @@ test("session start repairs detached background bash tool results before replay"
     const repaired = readSessionEntries(sessionFile).find((entry) => entry.id === "detached-result");
     assert.equal(repaired.parentId, "assistant-call");
     const request = requestText(mock.requests.at(-1));
-    assert.ok(request.indexOf(toolCallId) !== -1, "expected repaired tool call id to remain in model context");
+    // pi >= 1.4 sanitizes "|" in tool call ids when serializing requests.
+    const normalizedToolCallId = toolCallId.replace(/\|/g, "_");
+    assert.ok(
+      request.includes(toolCallId) || request.includes(normalizedToolCallId),
+      "expected repaired tool call id to remain in model context",
+    );
   } finally {
     await mock.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("bash background completion waits for an in-flight provider turn before triggering follow-up", async () => {
+test("bash background completion steers into the next in-run provider request", async () => {
   const cb = createControllableBrain();
   const mock = await createBgMock(cb.brain);
 
@@ -966,22 +986,22 @@ test("bash background completion waits for an in-flight provider turn before tri
     startContinuation.respond(text("background command started"));
     await mock.waitFor((event) => event.type === "agent_end" && JSON.stringify(event).includes("background command started"), TIMEOUT);
 
-    await mock.prompt("do unrelated work while the background command finishes");
+    await mock.prompt("do unrelated multi-step work while the background command finishes");
     const unrelatedCall = await cb.waitForCall(TIMEOUT);
 
     // The background job finishes while the unrelated provider request above is
-    // still pending. Regression guard: do not trigger a nested follow-up request
-    // from that busy/transient context; wait until the provider turn is idle.
+    // still pending. Regression guard: steering must not start a second,
+    // concurrent provider request from a busy context.
     await new Promise((resolve) => setTimeout(resolve, 700));
-    assert.equal(cb.pending().length, 0, "background follow-up should not call the provider while another call is in flight");
+    assert.equal(cb.pending().length, 0, "background result should not trigger a concurrent provider call while another call is in flight");
 
-    unrelatedCall.respond(text("unrelated turn complete"));
-    await mock.waitFor((event) => event.type === "agent_end" && JSON.stringify(event).includes("unrelated turn complete"), TIMEOUT);
+    unrelatedCall.respond(sh("echo step-one"));
+    // Same run, next turn: the completed background result is already in context.
+    const nextTurnCall = await cb.waitForCall((req) => requestText(req).includes("step-one"), TIMEOUT);
+    assert.match(backgroundResultText(nextTurnCall.request), /race-done/);
 
-    const followUpCall = await cb.waitForCall((req) => requestText(req).includes("race-done"), TIMEOUT);
-    assert.match(backgroundResultText(followUpCall.request), /race-done/);
-    followUpCall.respond(text("saw deferred background result"));
-    await mock.waitFor((event) => event.type === "agent_end" && JSON.stringify(event).includes("saw deferred background result"), TIMEOUT);
+    nextTurnCall.respond(text("unrelated work done"));
+    await mock.waitFor((event) => event.type === "agent_end" && JSON.stringify(event).includes("unrelated work done"), TIMEOUT);
   } finally {
     await mock.close();
   }

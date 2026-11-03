@@ -12,7 +12,7 @@
  */
 
 export interface PiContextAttrs {
-	[key: string]: string | number | boolean | undefined;
+	[key: string]: string | number | boolean | null | undefined;
 }
 
 export interface PiContextOptions {
@@ -24,7 +24,7 @@ export interface PiContextOptions {
 }
 
 /**
- * Build a <pi_context> envelope. Attribute values are quote-escaped; the body
+ * Build a <pi_context> envelope. Attribute values are XML-escaped; the body
  * is emitted as-is (pi-background-bash pre-escapes `</pi_context>` itself so
  * command output cannot prematurely close the envelope).
  */
@@ -32,7 +32,7 @@ export function piContext({ source, kind, id, attrs = {}, body = "" }: PiContext
 	const allAttrs: PiContextAttrs = { source, kind, ...(id ? { id } : {}), ...attrs };
 	const attrStr = Object.entries(allAttrs)
 		.filter(([, v]) => v !== undefined && v !== null)
-		.map(([k, v]) => `${k}="${String(v).replace(/"/g, "&quot;")}"`)
+		.map(([k, v]) => `${k}="${String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")}"`)
 		.join(" ");
 	return `<pi_context ${attrStr}>${body}</pi_context>`;
 }
@@ -46,6 +46,8 @@ export interface TruncationInfo {
 	removedBytes: number;
 	originalLength: number;
 	appendNotice: boolean;
+	totalLines?: number;
+	keptLines?: number;
 }
 
 export interface TruncateContextTextOptions {
@@ -94,8 +96,10 @@ export function truncateContextText(
 		content = cut.toString("utf8");
 	}
 
+	const totalLines = text.split("\n").length;
+	const keptLines = content.split("\n").length;
 	const truncation: TruncationInfo | undefined = truncated
-		? { truncated, mode, maxLines, maxBytes, removedLines, removedBytes, originalLength: text.length, appendNotice }
+		? { truncated, mode, maxLines, maxBytes, removedLines, removedBytes, originalLength: text.length, appendNotice, totalLines, keptLines }
 		: undefined;
 
 	if (truncated && appendNotice && truncation) {
@@ -105,8 +109,13 @@ export function truncateContextText(
 	return { content, truncation };
 }
 
-/** Build a notice like "[output truncated: tail kept (123 lines, 45 KB)]". */
+/** Build a notice like "[Showing lines 2006-2105 of 2105]", or "[output truncated: tail kept (13 KB)]" when only bytes were cut. */
 export function formatTruncationNotice(truncation: TruncationInfo, mode: "head" | "tail" = "tail"): string {
+	if (truncation?.removedLines > 0 && truncation.totalLines && truncation.keptLines) {
+		const first = mode === "head" ? 1 : truncation.totalLines - truncation.keptLines + 1;
+		const last = mode === "head" ? truncation.keptLines : truncation.totalLines;
+		return `[Showing lines ${first}-${last} of ${truncation.totalLines}]`;
+	}
 	const parts: string[] = [];
 	if (truncation?.removedLines > 0) parts.push(`${truncation.removedLines} line${truncation.removedLines > 1 ? "s" : ""}`);
 	if (truncation?.removedBytes > 0) parts.push(`${Math.max(1, Math.round(truncation.removedBytes / 1024))} KB`);

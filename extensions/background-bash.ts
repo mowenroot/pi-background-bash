@@ -735,53 +735,24 @@ function buildXmlResult(job: ActiveJob, outcome: Outcome, exitCode: number | nul
 	});
 }
 
-type PendingBackgroundResultFollowUp = {
-	job: ActiveJob;
-	content: string;
-	details: BackgroundBashDetails;
-};
-
-const pendingBackgroundResultFollowUps: PendingBackgroundResultFollowUp[] = [];
-
-function deliverBackgroundResultFollowUp(pi: ExtensionAPI, item: PendingBackgroundResultFollowUp): void {
+function sendBackgroundResultFollowUp(pi: ExtensionAPI, job: ActiveJob, content: string, details: BackgroundBashDetails): void {
 	if (shuttingDown) return;
-	repairDetachedBackgroundToolResults(item.job.repairContext, item.job.toolCallId, { rewriteFile: item.job.repairContext?.isIdle?.() === true });
+	repairDetachedBackgroundToolResults(job.repairContext, job.toolCallId, { rewriteFile: job.repairContext?.isIdle?.() === true });
+	// Steer the result in: while the agent is mid-run, pi drains the steering
+	// queue at the next turn boundary and injects the message into the next
+	// provider request in the same run (no second concurrent provider request,
+	// so the historical OpenAI Responses race cannot occur). While idle,
+	// triggerTurn starts a run immediately.
 	pi.sendMessage(
 		{
 			customType: CUSTOM_TYPE,
-			content: item.content,
+			content,
 			display: true,
-			details: item.details,
+			details,
 		},
-		{ deliverAs: "followUp", triggerTurn: true },
+		{ deliverAs: "steer", triggerTurn: true },
 	);
 }
-
-function flushPendingBackgroundResultFollowUps(pi: ExtensionAPI): void {
-	if (shuttingDown || pendingBackgroundResultFollowUps.length === 0) return;
-	const items = pendingBackgroundResultFollowUps.splice(0);
-	for (const item of items) deliverBackgroundResultFollowUp(pi, item);
-}
-
-function sendBackgroundResultFollowUp(pi: ExtensionAPI, job: ActiveJob, content: string, details: BackgroundBashDetails): void {
-	const item = { job, content, details };
-
-	// If a background command finishes while Pi is already inside a provider
-	// request (for example, after a foreground multi-tool turn), injecting a
-	// triggerTurn immediately can race with that in-flight request. With OpenAI
-	// Responses/Codex this has surfaced as "No tool call found for function call
-	// output" because a second request can be started from a transient context
-	// containing tool outputs whose matching tool-call response is not the active
-	// previous response. Queue the completion and flush it from agent_end instead
-	// of polling for idle.
-	if (job.repairContext?.isIdle?.() === false) {
-		pendingBackgroundResultFollowUps.push(item);
-		return;
-	}
-
-	deliverBackgroundResultFollowUp(pi, item);
-}
-
 function deliverBackgroundResult(pi: ExtensionAPI, job: ActiveJob, completed: CompletedBashRun, cwd: string) {
 	activeJobs.delete(job.id);
 	pendingJobs.finish(job.id);
@@ -839,6 +810,8 @@ function renderNativeBashResult(command: string, body: string, details: Backgrou
 		expanded,
 		showImages: true,
 		isError,
+		durationMs: details?.durationMs,
+		outputPad: 0,
 	});
 
 	const box = new Box(1, 1, (text) => (isError ? theme.bg("toolErrorBg", text) : theme.bg("toolSuccessBg", text)));
@@ -950,15 +923,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 
 	pi.on("session_shutdown", async () => {
 		abortAllJobs();
-		pendingBackgroundResultFollowUps.length = 0;
 		pendingJobs.detach();
-	});
-
-	pi.on("agent_end", async () => {
-		// Treat agent_end as the event-driven idle boundary, but defer one macrotask
-		// so Pi can finish unwinding the just-ended turn before the follow-up starts.
-		const handle = setImmediate(() => flushPendingBackgroundResultFollowUps(pi));
-		handle.unref?.();
 	});
 
 	pi.on("context", (event) => {

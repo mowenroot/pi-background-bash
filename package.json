@@ -40,7 +40,8 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && node --test --test-force-exit test/*.mjs",
     "test:node": "node --test --test-force-exit",
-    "hooks:install": "lefthook install"
+    "hooks:install": "lefthook install",
+    "postinstall": "patch-package"
   },
   "peerDependencies": {
     "@earendil-works/pi-agent-core": "*",
@@ -49,8 +50,8 @@
     "typebox": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "0.74.0",
-    "@earendil-works/pi-coding-agent": "0.74.0",
+    "@earendil-works/pi-agent-core": "1.4.0",
+    "@earendil-works/pi-coding-agent": "1.4.0",
     "@types/node": "^22.0.0",
     "lefthook": "^1.10.10",
     "pi-mock": "github:sshkeda/pi-mock",
