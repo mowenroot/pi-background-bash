@@ -54,6 +54,7 @@
     "@earendil-works/pi-coding-agent": "1.4.0",
     "@types/node": "^22.0.0",
     "lefthook": "^1.10.10",
+    "patch-package": "^8.0.1",
     "pi-mock": "github:sshkeda/pi-mock",
     "typebox": "^1.0.55",
     "typescript": "^5.0.0"
