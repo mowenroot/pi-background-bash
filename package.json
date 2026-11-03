@@ -41,7 +41,7 @@
     "test": "npm run typecheck && node --test --test-force-exit test/*.mjs",
     "test:node": "node --test --test-force-exit",
     "hooks:install": "lefthook install",
-    "postinstall": "patch-package"
+    "postinstall": "node scripts/postinstall.cjs"
   },
   "peerDependencies": {
     "@earendil-works/pi-agent-core": "*",
@@ -66,7 +66,8 @@
     "skills",
     "README.md",
     "LICENSE",
-    "extensions/pi-context-utils.ts"
+    "extensions/pi-context-utils.ts",
+    "scripts"
   ],
   "dependencies": {
     "pi-lane": "https://codeload.github.com/sshkeda/pi-lane/tar.gz/929a74b",
